@@ -1,0 +1,148 @@
+---
+title: "Risco de Crédito"
+output:
+  html_document:
+    df_print: paged
+---
+
+# Importação das bibliotecas:
+```{r}
+library(tidyverse)
+library(tidymodels)
+library(data.table)
+library(skimr)
+library(GGally)
+library(kknn)
+library(ggplot2);
+library(gridExtra)
+library(caret)
+require(knitr)
+```
+# Lendo o dataset:
+```{r}
+dados <- read.table("credit_data.csv", header = TRUE,
+                    sep = ",", fill = TRUE)
+```
+
+# Colunas do dataframe
+```{r}
+
+dados %>% colnames()
+
+```
+# Observando os tipos de dados das colunas.
+```{r}
+str(dados)
+```
+# Resumo estatístico da coluna "income"(renda)
+```{r}
+summary(dados$income)
+```
+# Resumo estatístico da coluna "age" (Idade)
+```{r}
+summary(dados$age)
+```
+# Resumo estatístico da coluna "loan" (Empréstimo)
+```{r}
+summary(dados$loan)
+```
+# Distribuição referente à coluna "default" (Inadimplentes)
+```{r}
+table(dados$default)
+```
+# Verificando a quantidade de idades abaixo da faixa permitida para crédito.
+```{r}
+dados %>% filter(age < 16)
+```
+# Substituindo idades inconsistentes pela média das idades. 
+
+```{r}
+dados$age[dados$age < 16] <- 45.332
+dados %>% filter(age < 16)
+```
+# Visualizando inadimplentes em relação à renda e empréstimo.
+```{r}
+dados$default <- as.character(as.integer(dados$default))
+ggplot(dados) +
+  geom_point(aes(x = loan, y = income, color = default))
+  
+```
+
+### O gráfico apresenta maior ausência de empréstimos para rendas menores, sugerindo haver uma restrição do valor de empréstimo concedido relacionada à faixa de renda.
+
+# Distribuição do valor de empréstimos.
+
+```{r}
+ggplot(dados) + 
+  geom_histogram(aes(x = loan), color = "black", fill = "white")
+```
+
+### Podemos observar que predominam valores de empréstimo de até 5000.
+
+# Distribuição do empréstimo em relação à inadimplência.
+
+```{r}
+dados %>% 
+  ggplot() + 
+    geom_boxplot(aes(x = default, y = loan, fill = default))
+```
+
+### A partir da faixa de empréstimo superior a 5000, vemos tendência à inadimplência. Embora existam alguns Outliers.
+
+# Distribuição da renda em relação à inadimplência.
+
+```{r}
+dados %>% 
+  ggplot() + 
+    geom_boxplot(aes(x = default, y = income, fill = default))
+
+```
+
+### A renda tende a ser insignificante no fator inadimplência.
+
+# Distribuição da idade em relação à inadimplência.
+
+```{r}
+ggplot(dados) +
+  geom_point(aes(x = loan, y = age, color = default))
+
+```
+
+### O gráfico sugere que a faixa etária de até 35 anos apresenta maior dificuldade em pagar o empréstimo quando o valor deste for superior a ~3000.
+
+# Criação do modelo
+
+## Divisão entre treino e teste.
+
+```{r}
+library(dplyr)
+train<-sample_frac(dados, 0.7)
+sid<-as.numeric(rownames(train)) # because rownames() returns character
+test<-dados[-sid,]
+```
+
+## Treinamento do modelo
+```{r}
+train$default <- as.numeric(as.character(train$default))
+test$default <- as.numeric(as.character(test$default))
+
+logit <- glm(default ~ loan + age, family='binomial', data=train)
+summary(logit)
+```
+## Matriz de confusão.
+
+```{r}
+test.probs <-predict(logit, test, type='response')
+pred.logit <- rep(0,length(test.probs))
+pred.logit[test.probs>=0.5] <- 1
+
+table(pred.logit, test$default)
+```
+## Precisão do modelo:
+
+```{r}
+
+confusionMatrix(table(test$default, pred.logit))
+
+```
+### Nosso modelo consegue prever 91,1% dos casos.
